@@ -40,9 +40,8 @@ func New(w io.Writer) *Alog {
 // the caller from being blocked.
 func (al Alog) Start() {
 	for msg := range al.msgCh {
-		go func(msg string) {
-			al.write(msg, nil)
-		}(msg)
+		go al.write(msg, nil)
+
 	}
 }
 
@@ -54,11 +53,13 @@ func (al Alog) formatMessage(msg string) string {
 }
 
 func (al Alog) write(msg string, wg *sync.WaitGroup) {
+	al.m.Lock()
+	defer al.m.Unlock()
 	_, err := al.dest.Write([]byte(al.formatMessage(msg)))
 	if err != nil {
-		go func() {
+		go func(err error) {
 			al.errorCh <- err
-		}()
+		}(err)
 	}
 }
 
@@ -66,7 +67,7 @@ func (al Alog) shutdown() {
 }
 
 // MessageChannel returns a channel that accepts messages that should be written to the log.
-func (al Alog) MessageChannel() <-chan string {
+func (al Alog) MessageChannel() chan<- string {
 	return al.msgCh
 }
 
@@ -84,7 +85,5 @@ func (al Alog) Stop() {
 
 // Write synchronously sends the message to the log output
 func (al Alog) Write(msg string) (int, error) {
-	al.m.Lock()
-	defer al.m.Unlock()
 	return al.dest.Write([]byte(al.formatMessage(msg)))
 }
